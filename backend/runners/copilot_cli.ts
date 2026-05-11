@@ -19,13 +19,21 @@ const TOOL_LINE_RE =
 
 const TEXT_FLUSH_INTERVAL_MS = 50;
 
+// Strip ANSI escape codes (color, cursor moves) from CLI output so they don't
+// render as garbage in the panel.
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g;
+const stripAnsi = (s: string) => s.replace(ANSI_RE, '');
+
 async function* runCopilot(opts: RunOptions): AsyncGenerator<RunnerEvent> {
   const t0 = Date.now();
   const args = ['-p', opts.prompt, '--allow-all'];
 
   const child = spawn('copilot', args, {
     cwd: opts.cwd,
-    env: process.env,
+    // Disable color so we get clean text without ANSI escapes (NO_COLOR is the
+    // de-facto cross-tool standard; FORCE_COLOR=0 also helps for Node-based CLIs).
+    env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', CI: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
@@ -56,7 +64,7 @@ async function* runCopilot(opts: RunOptions): AsyncGenerator<RunnerEvent> {
   let lineBuf = '';
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', (chunk: string) => {
-    lineBuf += chunk;
+    lineBuf += stripAnsi(chunk);
     let nl;
     while ((nl = lineBuf.indexOf('\n')) >= 0) {
       const line = lineBuf.slice(0, nl);
@@ -66,7 +74,7 @@ async function* runCopilot(opts: RunOptions): AsyncGenerator<RunnerEvent> {
   });
 
   child.stderr.setEncoding('utf8');
-  child.stderr.on('data', (c: string) => { stderr += c; });
+  child.stderr.on('data', (c: string) => { stderr += stripAnsi(c); });
 
   function processLine(line: string) {
     // Try to detect a tool-call line. If matched, surface as tool_call.
