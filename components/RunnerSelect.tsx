@@ -16,33 +16,29 @@ const LABEL: Record<string, string> = {
 
 export function RunnerSelect({ runners, selected, onChange }: Props) {
   if (!runners.length) return null;
+  const sel = runners.find((r) => r.id === selected);
+  const title = sel?.available ? sel.version ?? sel.id : sel ? `unavailable: ${sel.error ?? 'not found'}` : '';
+
   return (
-    <div className="flex items-center gap-1">
-      {runners.map((r) => {
-        const isSel = r.id === selected;
-        const disabled = !r.available;
-        const title = r.available
-          ? r.version || r.id
-          : `unavailable: ${r.error ?? 'not found'}`;
-        return (
-          <button
-            key={r.id}
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange(r.id)}
-            title={title}
-            className={[
-              'mono text-12 px-2 py-1 rounded-sm border transition-colors duration-120',
-              isSel
-                ? 'border-tprimary text-tprimary bg-s2'
-                : 'border-bsubtle text-tsecondary hover:bg-s2',
-              disabled ? 'opacity-50 cursor-not-allowed line-through' : '',
-            ].join(' ')}
-          >
-            {LABEL[r.id] ?? r.id}
-          </button>
-        );
-      })}
+    <div className="relative inline-flex items-center">
+      <select
+        value={selected}
+        onChange={(e) => onChange(e.target.value)}
+        title={title}
+        className="mono text-13 bg-s1 text-tprimary border border-bdefault rounded px-2 py-1 pr-7 appearance-none cursor-pointer hover:bg-s2 transition-colors duration-120 focus:border-tsecondary"
+      >
+        {runners.map((r) => (
+          <option key={r.id} value={r.id} disabled={!r.available}>
+            {(LABEL[r.id] ?? r.id) + (r.available ? '' : ' (unavailable)')}
+          </option>
+        ))}
+      </select>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute right-2 mono text-12 text-ttertiary"
+      >
+        ▾
+      </span>
     </div>
   );
 }
