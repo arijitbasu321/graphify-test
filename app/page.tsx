@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { Panel } from '@/components/Panel';
 import { AggregateStrip } from '@/components/AggregateStrip';
+import type { RunnerStatus } from '@/components/RunnerSelect';
 import { initialAggregate, initialPanel, type Aggregate, type PanelState, type PanelVariant } from '@/lib/state';
 import { streamPost } from '@/lib/sse';
 import type { RunnerEvent } from '@/backend/runners/base';
 
-type RunnerInfo = { runner: string; claude: { available: boolean; version?: string; error?: string } };
+type RunnerInfo = { defaultRunner: string; runners: RunnerStatus[] };
 
 export default function Page() {
   const [naivePath, setNaivePath] = useState('');
@@ -17,13 +18,27 @@ export default function Page() {
   const [naive, setNaive] = useState<PanelState>(initialPanel);
   const [graph, setGraph] = useState<PanelState>(initialPanel);
   const [aggregate, setAggregate] = useState<Aggregate>(initialAggregate);
-  const [runner, setRunner] = useState<RunnerInfo>({ runner: 'mock', claude: { available: true } });
+  const [runnerInfo, setRunnerInfo] = useState<RunnerInfo>({ defaultRunner: 'mock', runners: [] });
+  const [selectedRunner, setSelectedRunner] = useState<string>('mock');
+  const initializedRunnerRef = useRef(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const runningRef = useRef<{ naive: boolean; graph: boolean }>({ naive: false, graph: false });
 
   useEffect(() => {
-    fetch('/api/runner-info').then((r) => r.json()).then(setRunner).catch(() => {});
+    fetch('/api/runner-info')
+      .then((r) => r.json())
+      .then((info: RunnerInfo) => {
+        setRunnerInfo(info);
+        if (!initializedRunnerRef.current) {
+          // pick the default if available, else first available, else mock
+          const def = info.runners.find((r) => r.id === info.defaultRunner && r.available);
+          const firstAvail = info.runners.find((r) => r.available);
+          setSelectedRunner((def ?? firstAvail ?? { id: 'mock' }).id);
+          initializedRunnerRef.current = true;
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleEvent = useCallback((variant: PanelVariant, evt: RunnerEvent) => {
@@ -85,7 +100,7 @@ export default function Page() {
       let lastTokens = 0;
       streamPost(
         url,
-        { repoPath, prompt: prompt.trim() },
+        { repoPath, prompt: prompt.trim(), runner: selectedRunner },
         {
           onEvent: (evt) => {
             handleEvent(variant, evt);
@@ -104,7 +119,7 @@ export default function Page() {
 
     runOne('naive');
     runOne('graph');
-  }, [naivePath, graphPath, prompt, handleEvent]);
+  }, [naivePath, graphPath, prompt, selectedRunner, handleEvent]);
 
   const running = naive.status === 'running' || graph.status === 'running';
 
@@ -121,9 +136,11 @@ export default function Page() {
     setAggregate(initialAggregate);
   }, []);
 
-  const claudeError =
-    runner.runner === 'claude_code' && !runner.claude.available
-      ? runner.claude.error ?? 'unknown error'
+  // Surface a banner if the selected runner reports unavailable
+  const sel = runnerInfo.runners.find((r) => r.id === selectedRunner);
+  const runnerError =
+    sel && !sel.available
+      ? `${selectedRunner} not available — ${sel.error ?? 'not installed'}`
       : null;
 
   return (
@@ -133,14 +150,16 @@ export default function Page() {
         graphPath={graphPath}
         prompt={prompt}
         running={running}
-        runnerId={runner.runner}
-        claudeError={claudeError}
+        runners={runnerInfo.runners}
+        selectedRunner={selectedRunner}
+        onSelectRunner={setSelectedRunner}
+        runnerError={runnerError}
         onChange={onChange}
         onRun={onRun}
       />
       <main className="flex-1 grid grid-cols-2 gap-4 p-4 min-h-0">
-        <Panel variant="naive" state={naive} runnerId={runner.runner} />
-        <Panel variant="graph" state={graph} runnerId={runner.runner} />
+        <Panel variant="naive" state={naive} runnerId={selectedRunner} />
+        <Panel variant="graph" state={graph} runnerId={selectedRunner} />
       </main>
       <AggregateStrip aggregate={aggregate} onReset={onReset} />
     </div>

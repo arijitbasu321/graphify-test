@@ -1,9 +1,9 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { RunnerEvent, RunnerVariant } from '@/backend/runners/base';
-import { getActiveRunner } from '@/backend/runners';
+import { getRunner, type RunnerId } from '@/backend/runners';
 
-export type StreamRequestBody = { repoPath?: unknown; prompt?: unknown };
+export type StreamRequestBody = { repoPath?: unknown; prompt?: unknown; runner?: unknown };
 
 export async function validateRepoPath(repoPath: string, variant: RunnerVariant): Promise<string | null> {
   if (!repoPath || typeof repoPath !== 'string') return 'repoPath is required';
@@ -37,8 +37,8 @@ function sseEncode(event: RunnerEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
 }
 
-export function buildStream(prompt: string, cwd: string, variant: RunnerVariant): Response {
-  const runner = getActiveRunner();
+export function buildStream(prompt: string, cwd: string, variant: RunnerVariant, runnerId?: RunnerId): Response {
+  const runner = getRunner(runnerId);
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
@@ -81,12 +81,17 @@ export function buildStream(prompt: string, cwd: string, variant: RunnerVariant)
   });
 }
 
-export async function parseBody(req: Request): Promise<{ repoPath: string; prompt: string } | { error: string }> {
+export async function parseBody(req: Request): Promise<{ repoPath: string; prompt: string; runner?: RunnerId } | { error: string }> {
   let body: StreamRequestBody;
   try { body = (await req.json()) as StreamRequestBody; } catch { return { error: 'invalid JSON body' }; }
   const repoPath = typeof body.repoPath === 'string' ? body.repoPath.trim() : '';
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
   if (!repoPath) return { error: 'repoPath is required' };
   if (!prompt) return { error: 'prompt is required' };
-  return { repoPath, prompt };
+  let runner: RunnerId | undefined;
+  if (typeof body.runner === 'string') {
+    const r = body.runner.toLowerCase();
+    if (r === 'mock' || r === 'claude_code' || r === 'copilot_cli') runner = r;
+  }
+  return { repoPath, prompt, runner };
 }

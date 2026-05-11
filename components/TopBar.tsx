@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { RunnerSelect, type RunnerStatus } from './RunnerSelect';
 
 type DetectResult = { exists: boolean; isDir: boolean; hasGraphify: boolean; error: string | null };
 
@@ -9,8 +10,10 @@ type Props = {
   graphPath: string;
   prompt: string;
   running: boolean;
-  runnerId: string;
-  claudeError?: string | null;
+  runners: RunnerStatus[];
+  selectedRunner: string;
+  onSelectRunner: (id: string) => void;
+  runnerError?: string | null;
   onChange: (next: { naivePath?: string; graphPath?: string; prompt?: string }) => void;
   onRun: () => void;
 };
@@ -38,7 +41,7 @@ function useDetect(p: string): DetectResult {
 }
 
 export function TopBar(props: Props) {
-  const { naivePath, graphPath, prompt, running, runnerId, claudeError, onChange, onRun } = props;
+  const { naivePath, graphPath, prompt, running, runners, selectedRunner, onSelectRunner, runnerError, onChange, onRun } = props;
   const naiveDetect = useDetect(naivePath);
   const graphDetect = useDetect(graphPath);
 
@@ -46,11 +49,15 @@ export function TopBar(props: Props) {
 
   return (
     <header className="border-b border-bdefault bg-s1">
-      {claudeError && (
+      {runnerError && (
         <div className="px-4 py-2 border-b border-bsubtle text-13 text-danger bg-bg">
-          claude CLI not available — {claudeError}
+          {runnerError}
         </div>
       )}
+      <div className="px-4 py-2 border-b border-bsubtle flex items-center justify-between">
+        <span className="text-12 text-ttertiary uppercase tracking-wider">runner</span>
+        <RunnerSelect runners={runners} selected={selectedRunner} onChange={onSelectRunner} />
+      </div>
       <div className="grid grid-cols-12 gap-3 px-4 py-3 items-start">
         <div className="col-span-3">
           <label className="block text-12 text-ttertiary mb-2 uppercase tracking-wider">naive repo path</label>
@@ -96,10 +103,6 @@ export function TopBar(props: Props) {
           >
             {running ? 'running…' : 'run'}
           </button>
-          <div className="flex items-center justify-end gap-2 text-12 text-ttertiary">
-            <span>runner</span>
-            <span className="mono text-tsecondary border border-bsubtle rounded-sm px-1">{runnerId}</span>
-          </div>
         </div>
       </div>
     </header>

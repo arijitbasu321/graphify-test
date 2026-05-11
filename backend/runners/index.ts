@@ -5,18 +5,28 @@ import { copilotCliRunner } from './copilot_cli';
 
 export type RunnerId = 'mock' | 'claude_code' | 'copilot_cli';
 
+export const RUNNER_IDS: RunnerId[] = ['mock', 'claude_code', 'copilot_cli'];
+
 const REGISTRY: Record<RunnerId, Runner> = {
   mock: mockRunner,
   claude_code: claudeCodeRunner,
   copilot_cli: copilotCliRunner,
 };
 
-export function getActiveRunnerId(): RunnerId {
-  const v = (process.env.RUNNER ?? 'mock').toLowerCase();
-  if (v === 'claude_code' || v === 'copilot_cli' || v === 'mock') return v;
-  return 'mock';
+function isRunnerId(v: string): v is RunnerId {
+  return v === 'mock' || v === 'claude_code' || v === 'copilot_cli';
 }
 
-export function getActiveRunner(): Runner {
-  return REGISTRY[getActiveRunnerId()];
+export function getDefaultRunnerId(): RunnerId {
+  const v = (process.env.RUNNER ?? 'mock').toLowerCase();
+  return isRunnerId(v) ? v : 'mock';
 }
+
+export function getRunner(id: string | undefined | null): Runner {
+  if (id && isRunnerId(id)) return REGISTRY[id];
+  return REGISTRY[getDefaultRunnerId()];
+}
+
+// Back-compat (kept while components migrate):
+export const getActiveRunnerId = getDefaultRunnerId;
+export function getActiveRunner(): Runner { return REGISTRY[getDefaultRunnerId()]; }

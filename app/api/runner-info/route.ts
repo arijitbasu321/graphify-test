@@ -1,27 +1,55 @@
 import { spawn } from 'node:child_process';
-import { getActiveRunnerId } from '@/backend/runners';
+import { getDefaultRunnerId, RUNNER_IDS, type RunnerId } from '@/backend/runners';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function checkClaude(): Promise<{ available: boolean; version?: string; error?: string }> {
+type CliCheck = { available: boolean; version?: string; error?: string };
+
+function checkCli(bin: string, args: string[] = ['--version']): Promise<CliCheck> {
   return new Promise((resolve) => {
-    const child = spawn('claude', ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let settled = false;
+    const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
     child.stdout.on('data', (d) => (out += d.toString()));
     child.stderr.on('data', (d) => (err += d.toString()));
-    child.on('error', (e) => resolve({ available: false, error: e.message }));
-    child.on('close', (code) => {
-      if (code === 0) resolve({ available: true, version: out.trim() });
-      else resolve({ available: false, error: err.trim() || `exit ${code}` });
+    child.on('error', (e) => {
+      if (settled) return;
+      settled = true;
+      resolve({ available: false, error: e.message });
     });
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      if (code === 0) resolve({ available: true, version: (out || err).trim().split('\n')[0] });
+      else resolve({ available: false, error: (err || out).trim().split('\n')[0] || `exit ${code}` });
+    });
+    // safety timeout
+    setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child.kill(); } catch {}
+      resolve({ available: false, error: 'timeout' });
+    }, 4000);
   });
 }
 
+type RunnerStatus = { id: RunnerId; available: boolean; version?: string; error?: string };
+
 export async function GET() {
-  const runner = getActiveRunnerId();
-  let claude: { available: boolean; version?: string; error?: string } = { available: true };
-  if (runner === 'claude_code') claude = await checkClaude();
-  return Response.json({ runner, claude });
+  const defaultRunner = getDefaultRunnerId();
+
+  const [claude, copilot] = await Promise.all([
+    checkCli('claude', ['--version']),
+    checkCli('copilot', ['--version']),
+  ]);
+
+  const runners: RunnerStatus[] = RUNNER_IDS.map((id) => {
+    if (id === 'mock') return { id, available: true };
+    if (id === 'claude_code') return { id, ...claude };
+    return { id, ...copilot };
+  });
+
+  return Response.json({ defaultRunner, runners });
 }

@@ -10,5 +10,5 @@ export async function POST(req: Request) {
   }
   const err = await validateRepoPath(parsed.repoPath, 'naive');
   if (err) return Response.json({ error: err }, { status: 400 });
-  return buildStream(parsed.prompt, parsed.repoPath, 'naive');
+  return buildStream(parsed.prompt, parsed.repoPath, 'naive', parsed.runner);
 }
