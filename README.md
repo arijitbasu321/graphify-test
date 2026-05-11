@@ -41,6 +41,7 @@ Type a question and click run. Both panels stream simultaneously. Mid-stream the
 - Next.js 14 App Router · TypeScript · Tailwind · Geist
 - SSE streaming end-to-end; no LLM SDK; subprocess-only.
 
-## Spec
+## Docs
 
-The full project brief lives in [`lot.md`](lot.md).
+- [`HANDOFF.md`](HANDOFF.md) — dev handoff: file layout, runner contract, how to add a new backend, sharp edges
+- [`lot.md`](lot.md) — original project brief
